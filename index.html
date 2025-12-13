@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>國道10號西向 - 即時路況監控</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft JhengHei", Arial, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #ffffff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+        }
+
+        h1 {
+            font-size: 2rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            opacity: 0.9;
+            color: #a8d0ff;
+        }
+
+        .camera-grid {
+            display: grid;
+            gap: 15px;
+            max-width: 900px; /* 50% of 1800px as default */
+            margin: 0 auto;
+            transition: max-width 0.3s ease;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        }
+
+        /* Mobile optimization - 2 columns on iPhone */
+        @media (max-width: 768px) {
+            .camera-grid {
+                gap: 10px;
+                grid-template-columns: repeat(2, 1fr);
+                max-width: 100%;
+                padding: 0 10px;
+            }
+
+            .camera-card {
+                padding: 10px;
+            }
+
+            .camera-label {
+                font-size: 0.95rem;
+            }
+
+            .camera-location {
+                font-size: 0.75rem;
+            }
+
+            .controls {
+                top: 10px;
+                right: 10px;
+                padding: 10px 15px;
+            }
+
+            .control-label {
+                font-size: 0.85rem;
+            }
+
+            .size-slider {
+                width: 80px;
+            }
+
+            header {
+                padding: 15px;
+                margin-bottom: 20px;
+            }
+
+            h1 {
+                font-size: 1.5rem;
+            }
+
+            .subtitle {
+                font-size: 0.85rem;
+            }
+        }
+
+        .camera-card {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .camera-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        .camera-label {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+            text-align: center;
+            color: #4dd0e1;
+        }
+
+        .camera-location {
+            font-size: 0.85rem;
+            color: #b0bec5;
+            text-align: center;
+            margin-bottom: 12px;
+        }
+
+        .camera-feed {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #263238;
+        }
+
+        .camera-feed img {
+            width: 100%;
+            height: auto;
+            display: block;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #2c3e50 25%, #34495e 25%, #34495e 50%, #2c3e50 50%, #2c3e50 75%, #34495e 75%, #34495e);
+            background-size: 40px 40px;
+        }
+
+        .camera-feed img[alt]:after {
+            content: attr(alt);
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #e74c3c;
+            font-size: 0.9rem;
+            text-align: center;
+        }
+
+        .controls {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .control-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .mode-buttons {
+            display: flex;
+            gap: 8px;
+        }
+
+        .mode-btn {
+            padding: 6px 12px;
+            background: #34495e;
+            color: #fff;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .mode-btn:hover {
+            background: #455a64;
+        }
+
+        .mode-btn.active {
+            background: #00acc1;
+            border-color: #0097a7;
+        }
+
+        .control-label {
+            font-size: 0.9rem;
+            color: #4dd0e1;
+            white-space: nowrap;
+            min-width: 60px;
+        }
+
+        .size-slider {
+            width: 120px;
+            height: 6px;
+            border-radius: 3px;
+            background: #34495e;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+
+        .size-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00acc1;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .size-slider::-webkit-slider-thumb:hover {
+            background: #0097a7;
+            transform: scale(1.2);
+        }
+
+        .size-slider::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #00acc1;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .size-slider::-moz-range-thumb:hover {
+            background: #0097a7;
+            transform: scale(1.2);
+        }
+
+        .size-value {
+            font-size: 0.9rem;
+            color: #ffffff;
+            font-weight: 600;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        .refresh-btn {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: #00acc1;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 60px;
+            height: 60px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .refresh-btn:hover {
+            background: #0097a7;
+            transform: scale(1.1) rotate(180deg);
+        }
+
+        .refresh-btn:active {
+            transform: scale(0.95) rotate(180deg);
+        }
+
+        footer {
+            text-align: center;
+            margin-top: 40px;
+            padding: 20px;
+            color: #90caf9;
+            font-size: 0.9rem;
+        }
+
+        .camera-hidden {
+            display: none !important;
+        }
+
+        @media print {
+            body {
+                background: white;
+                color: black;
+            }
+            .refresh-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>國道10號西向 - 即時路況監控</h1>
+        <div class="subtitle">National Highway 10 Westbound - Live Traffic Cameras</div>
+        <div class="subtitle">燕巢 → 仁武 → 鼎金 → 左營</div>
+    </header>
+
+    <div class="controls">
+        <div class="control-group">
+            <span class="control-label">畫面大小</span>
+            <input type="range" class="size-slider" id="sizeSlider" min="25" max="100" value="50" step="5">
+            <span class="size-value" id="sizeValue">50%</span>
+        </div>
+    </div>
+
+    <main class="camera-grid">
+        <div class="camera-card">
+            <div class="camera-label">1K+252</div>
+            <div class="camera-location">鼎金系統交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=111"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card">
+            <div class="camera-label">2K+580</div>
+            <div class="camera-location">仁武交流道到鼎金系統交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=3030"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card">
+            <div class="camera-label">7K+650</div>
+            <div class="camera-location">仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=3081"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card camera-hidden">
+            <div class="camera-label">8K+015</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=1012"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card">
+            <div class="camera-label">8K+765</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=456"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card camera-hidden">
+            <div class="camera-label">9K+190</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=317"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card camera-hidden">
+            <div class="camera-label">9K+645</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=303"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card camera-hidden">
+            <div class="camera-label">10K+440</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=1008"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card">
+            <div class="camera-label">11K+670</div>
+            <div class="camera-location">燕巢交流道到仁武交流道</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=318"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card">
+            <div class="camera-label">12K+900</div>
+            <div class="camera-location">燕巢交流道平面</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=319"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+
+        <div class="camera-card camera-hidden">
+            <div class="camera-label">13K+012</div>
+            <div class="camera-location">燕巢交流道前</div>
+            <div class="camera-feed">
+                <img src="https://cctvs.freeway.gov.tw/live-view/mjpg/video.cgi?camera=312"
+                     alt="Camera feed unavailable"
+                     loading="lazy">
+            </div>
+        </div>
+    </main>
+
+    <button class="refresh-btn" onclick="refreshAllFeeds()" title="Refresh all camera feeds">
+        ↻
+    </button>
+
+    <footer>
+        資料來源：交通部高速公路局 | Source: Taiwan Freeway Bureau
+    </footer>
+
+    <script>
+        // Auto-reconnect configuration
+        const REFRESH_INTERVAL = 7000; // Refresh every 7 seconds (before 8s timeout)
+        const originalUrls = new Map(); // Store original camera URLs
+
+        function refreshAllFeeds() {
+            const images = document.querySelectorAll('.camera-feed img');
+            const btn = document.querySelector('.refresh-btn');
+
+            // Add spinning animation
+            btn.style.transform = 'scale(0.9) rotate(360deg)';
+
+            images.forEach(img => {
+                reloadImage(img);
+            });
+
+            // Reset button after animation
+            setTimeout(() => {
+                btn.style.transform = '';
+            }, 300);
+        }
+
+        function getBaseUrl(url) {
+            // Extract camera parameter and reconstruct base URL
+            const match = url.match(/(.*video\.cgi\?camera=\d+)/);
+            return match ? match[1] : url.split('?')[0];
+        }
+
+        function reloadImage(img) {
+            const baseUrl = originalUrls.get(img) || getBaseUrl(img.src);
+            img.src = baseUrl + '&t=' + new Date().getTime();
+        }
+
+        function setupCamera(img) {
+            // Store the original URL with camera parameter
+            const baseUrl = getBaseUrl(img.src);
+            originalUrls.set(img, baseUrl);
+
+            // Handle error events (immediate reconnect)
+            img.addEventListener('error', function() {
+                const cameraId = baseUrl.match(/camera=(\d+)/);
+                console.log('Camera error, reconnecting... camera=' + (cameraId ? cameraId[1] : 'unknown'));
+
+                // Immediate reconnect on error
+                setTimeout(() => {
+                    reloadImage(img);
+                }, 500);
+            });
+        }
+
+        // Size control
+        function updateCameraSize(size) {
+            const grid = document.querySelector('.camera-grid');
+            const maxWidth = (1800 * size / 100) + 'px';
+            grid.style.maxWidth = maxWidth;
+            document.getElementById('sizeValue').textContent = size + '%';
+        }
+
+        // Display mode control
+        let currentMode = 'all';
+
+        function setDisplayMode(mode) {
+            currentMode = mode;
+            const cards = document.querySelectorAll('.camera-card');
+
+            // Update button states
+            document.querySelectorAll('.mode-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+
+            // Stop all streams first
+            cards.forEach(card => {
+                const img = card.querySelector('img');
+                img.src = '';
+            });
+
+            // Wait a bit then load selected streams
+            setTimeout(() => {
+                cards.forEach((card, index) => {
+                    const img = card.querySelector('img');
+                    const baseUrl = originalUrls.get(img);
+
+                    if (mode === 'all') {
+                        card.style.display = '';
+                        // Load streams with delay to avoid hitting limit
+                        setTimeout(() => {
+                            reloadImage(img);
+                        }, index * 1000);
+                    } else if (mode === 'first6') {
+                        if (index < 6) {
+                            card.style.display = '';
+                            reloadImage(img);
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    } else if (mode === 'last5') {
+                        if (index >= 6) {
+                            card.style.display = '';
+                            reloadImage(img);
+                        } else {
+                            card.style.display = 'none';
+                        }
+                    }
+                });
+            }, 100);
+        }
+
+        // Initialize all cameras
+        document.addEventListener('DOMContentLoaded', function() {
+            const images = document.querySelectorAll('.camera-feed img');
+            images.forEach((img, index) => {
+                setupCamera(img);
+                // Load first 6 immediately, others with delay
+                if (index < 6) {
+                    // Load immediately
+                } else {
+                    // Delay loading to avoid browser connection limit
+                    setTimeout(() => {
+                        reloadImage(img);
+                    }, (index - 5) * 1000);
+                }
+            });
+
+            // Set initial size to 50%
+            updateCameraSize(50);
+
+            // Size slider control
+            const sizeSlider = document.getElementById('sizeSlider');
+            sizeSlider.addEventListener('input', function() {
+                updateCameraSize(this.value);
+            });
+
+            // Refresh streams based on current mode
+            setInterval(() => {
+                const cards = document.querySelectorAll('.camera-card');
+                cards.forEach((card, index) => {
+                    if (card.style.display !== 'none') {
+                        const img = card.querySelector('img');
+
+                        if (currentMode === 'all') {
+                            // In 'all' mode, refresh in batches to avoid connection limit
+                            const batch = Math.floor(index / 6);
+                            setTimeout(() => {
+                                reloadImage(img);
+                            }, batch * 2000);
+                        } else {
+                            // In filtered mode, refresh normally
+                            reloadImage(img);
+                        }
+                    }
+                });
+            }, REFRESH_INTERVAL);
+        });
+    </script>
+</body>
+</html>
